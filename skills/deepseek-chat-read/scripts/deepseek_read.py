@@ -9,31 +9,137 @@ Endpoints used:
   - GET /api/v0/share/content?share_id=                (public share, no auth)
 
 Auth:
-  The session token is read ONLY from the DEEPSEEK_WEB_TOKEN environment
-  variable. It is sent as `Authorization: Bearer <token>` on authenticated
-  calls, never printed, logged, or written to disk. The public-share call
-  sends no Authorization header at all.
+  The session token comes from DEEPSEEK_WEB_TOKEN, or, with
+  --from-firefox, is extracted in memory from the user's own Firefox
+  localStorage database (never copied, printed, logged, or written).
+  It is sent as `Authorization: Bearer *** on authenticated
+  calls. The public-share call sends no Authorization header at all.
 """
 from __future__ import annotations
 
 import argparse
+import configparser
 import json
 import os
+import sqlite3
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 DEFAULT_BASE_URL = "https://chat.deepseek.com"
 TOKEN_ENV_VAR = "DEEPSEEK_WEB_TOKEN"
 USER_AGENT = "deepseek-chat-read/1.0 (read-only GET client)"
 
 
-def _get_token() -> str:
+def _parse_stored_token(raw: object) -> str:
+    """Unwrap a localStorage value: {"value": "...", "__version": "0"} or raw."""
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return ""
+    if not isinstance(raw, str):
+        return ""
+    text = raw.strip()
+    if text.startswith("{"):
+        try:
+            obj = json.loads(text)
+        except json.JSONDecodeError:
+            return text
+        if isinstance(obj, dict) and isinstance(obj.get("value"), str):
+            return obj["value"].strip()
+    return text
+
+
+def _firefox_profile_dirs(profile: str | None = None) -> list[Path]:
+    home = Path.home() / ".mozilla" / "firefox"
+    if profile:
+        return [Path(profile).expanduser()]
+    dirs: list[Path] = []
+    ini = home / "profiles.ini"
+    if ini.is_file():
+        parser = configparser.ConfigParser()
+        parser.read(ini, encoding="utf-8")
+        for section in parser.sections():
+            rel = parser.get(section, "Path", fallback="")
+            if rel and (home / rel).is_dir():
+                dirs.append(home / rel)
+    if not dirs:
+        dirs = sorted(p for p in home.glob("*.default*") if p.is_dir())
+    # De-duplicate, keep order (profiles.ini order first).
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def _read_token_from_sqlite(path: Path, sql: str, params: tuple) -> str:
+    # immutable=1: open read-only without copying the DB (which holds the
+    # token), so nothing is written to disk by this extraction.
+    uri = f"file:{path}?mode=ro&immutable=1"
+    try:
+        con = sqlite3.connect(uri, uri=True)
+        try:
+            row = con.execute(sql, params).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return ""
+    if not row:
+        return ""
+    return _parse_stored_token(row[0])
+
+
+def extract_user_token_from_firefox(profile: str | None = None) -> str:
+    """Read userToken from the user's own Firefox localStorage DBs.
+
+    Modern Firefox stores per-origin localStorage at
+    storage/default/https+++chat.deepseek.com/ls/data.sqlite (table
+    `data`, key `userToken`); older builds use webappsstore.sqlite
+    (table `webappsstore2`). The token stays in memory only.
+    """
+    for prof in _firefox_profile_dirs(profile):
+        ls_db = prof / "storage" / "default" / "https+++chat.deepseek.com" / "ls" / "data.sqlite"
+        if ls_db.is_file():
+            token = _read_token_from_sqlite(
+                ls_db, "SELECT value FROM data WHERE key = ?", ("userToken",)
+            )
+            if token:
+                return token
+        wa_db = prof / "webappsstore.sqlite"
+        if wa_db.is_file():
+            token = _read_token_from_sqlite(
+                wa_db,
+                "SELECT value FROM webappsstore2 WHERE key = ? "
+                "AND originKey LIKE '%chat.deepseek.com%'",
+                ("userToken",),
+            )
+            if token:
+                return token
+    print(
+        "error: userToken not found in Firefox localStorage; "
+        "open chat.deepseek.com in Firefox and log in first, "
+        f"or set {TOKEN_ENV_VAR}",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+
+def _get_token(args: argparse.Namespace | None = None) -> str:
+    if args is not None and getattr(args, "from_firefox", False):
+        return extract_user_token_from_firefox(
+            getattr(args, "firefox_profile", None)
+        )
     token = os.environ.get(TOKEN_ENV_VAR, "").strip()
     if not token:
         print(
-            f"error: {TOKEN_ENV_VAR} environment variable is not set",
+            f"error: {TOKEN_ENV_VAR} environment variable is not set "
+            "(or use --from-firefox)",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -81,6 +187,12 @@ def _sessions(payload: object) -> list:
             value = data.get(key)
             if isinstance(value, list):
                 return value
+        # Live payloads nest under data.biz_data.chat_sessions.
+        for value in data.values():
+            if isinstance(value, dict):
+                nested = _sessions(value)
+                if nested:
+                    return nested
     return []
 
 
@@ -161,7 +273,7 @@ def _base_url(args: argparse.Namespace) -> str:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    token = _get_token()
+    token = _get_token(args)
     query = urllib.parse.urlencode({"count": args.count})
     url = f"{_base_url(args)}/api/v0/chat_session/fetch_page?{query}"
     payload = _get_json(url, token)
@@ -188,7 +300,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_read(args: argparse.Namespace) -> int:
-    token = _get_token()
+    token = _get_token(args)
     query = urllib.parse.urlencode({"chat_session_id": args.chat_session_id})
     url = f"{_base_url(args)}/api/v0/chat/history_messages?{query}"
     payload = _get_json(url, token)
@@ -241,12 +353,26 @@ def build_parser() -> argparse.ArgumentParser:
             help="write output to this file instead of stdout",
         )
 
+    def add_auth(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument(
+            "--from-firefox",
+            action="store_true",
+            help="extract userToken from your own Firefox localStorage "
+            "(in memory only; no manual DevTools copying)",
+        )
+        sub.add_argument(
+            "--firefox-profile",
+            default=None,
+            help="Firefox profile directory (default: auto-detect)",
+        )
+
     p_list = subparsers.add_parser(
         "list", help="list chat sessions (GET /api/v0/chat_session/fetch_page)"
     )
     p_list.add_argument(
         "--count", type=int, default=20, help="number of sessions (default: 20)"
     )
+    add_auth(p_list)
     add_common(p_list)
     p_list.set_defaults(func=cmd_list)
 
@@ -260,6 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="id of the chat session to read",
     )
+    add_auth(p_read)
     add_common(p_read)
     p_read.set_defaults(func=cmd_read)
 

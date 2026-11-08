@@ -16,11 +16,23 @@ Backed by `scripts/deepseek_read.py` (stdlib only — no third-party packages).
 
 ## Procedure
 
-1. Export the token from your logged-in `chat.deepseek.com` session into the
-   environment (never into a file in this repo):
-   ```bash
-   export DEEPSEEK_WEB_TOKEN='...'   # secret — never commit, print, or paste it anywhere
-   ```
+1. Get the token from your logged-in `chat.deepseek.com` session, either
+   way (never into a file in this repo):
+   - **Preferred — automatic, from your own Firefox profile.** The script
+     reads `userToken` in memory from Firefox's per-origin localStorage
+     DB (`storage/default/https+++chat.deepseek.com/ls/data.sqlite`,
+     falling back to old `webappsstore.sqlite`). It opens the DB
+     read-only/immutable — no copy, no print, no write:
+     ```bash
+     python scripts/deepseek_read.py list --count 20 --from-firefox
+     ```
+   - **Fallback — environment variable.** Copy `userToken` from
+     DevTools → Application → Local Storage yourself:
+     ```bash
+     export DEEPSEEK_WEB_TOKEN='...'   # secret — never commit, print, or paste it anywhere
+     ```
+   Requires Firefox to have visited/logged in to chat.deepseek.com.
+   `--firefox-profile <dir>` overrides profile auto-detection.
 2. List sessions:
    ```bash
    python scripts/deepseek_read.py list --count 20
@@ -50,10 +62,12 @@ Output formats: `json` (raw payload), `messages` (plain-text transcript),
 
 ## Token handling
 
-- The token comes ONLY from the `DEEPSEEK_WEB_TOKEN` environment variable.
-  There is no `--token` flag and no token file option.
-- It is sent as `Authorization: Bearer <token>` on `list`/`read` only.
-- It is never printed, logged, or written to disk. `.gitignore` blocks
+- The token comes from `--from-firefox` (your own Firefox profile) or
+  the `DEEPSEEK_WEB_TOKEN` environment variable. There is no `--token`
+  flag and no token file option.
+- Firefox extraction opens the localStorage DB read-only/immutable and
+  keeps the token in memory only; it is never copied, printed, logged,
+  or written to disk. `.gitignore` blocks
   `.env`, `*.token`, `token.txt`, `cookies*.json`, and similar.
 - Missing token: the script exits with an error naming the variable only.
 

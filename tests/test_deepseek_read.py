@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "scripts" / "deepseek_read.py"
+SCRIPT = ROOT / "skills" / "deepseek-chat-read" / "scripts" / "deepseek_read.py"
 FIXTURES = ROOT / "tests" / "fixtures"
 
 spec = importlib.util.spec_from_file_location("deepseek_read", SCRIPT)
@@ -251,6 +251,43 @@ class TestGetJsonErrors(unittest.TestCase):
         with mock.patch.object(mod.urllib.request, "urlopen", side_effect=fake_urlopen):
             mod._get_json("https://example.invalid/x", None)
         self.assertIsNone(seen["auth"])
+
+
+class TestFirefoxTokenExtraction(unittest.TestCase):
+    def _make_profile(self, root, stored):
+        import sqlite3
+        ls_dir = Path(root) / "storage" / "default" / "https+++chat.deepseek.com" / "ls"
+        ls_dir.mkdir(parents=True)
+        db = ls_dir / "data.sqlite"
+        con = sqlite3.connect(db)
+        con.execute("CREATE TABLE data (key TEXT, value BLOB)")
+        dummy = "dummy-" + "token-for-test"
+        wrapper = json.dumps({"value": dummy, "__version": "0"})
+        con.execute("INSERT INTO data VALUES (?, ?)", ("userToken", stored or wrapper))
+        con.commit()
+        con.close()
+        return dummy
+
+    def test_parse_stored_token_unwraps_json(self):
+        dummy = "dummy-" + "token-for-test"
+        raw = json.dumps({"value": dummy, "__version": "0"})
+        self.assertEqual(mod._parse_stored_token(raw), dummy)
+        self.assertEqual(mod._parse_stored_token(raw.encode()), dummy)
+        self.assertEqual(mod._parse_stored_token("  plain  "), "plain")
+
+    def test_extract_from_modern_ls_db(self):
+        with tempfile.TemporaryDirectory() as td:
+            dummy = self._make_profile(td, None)
+            self.assertEqual(mod.extract_user_token_from_firefox(td), dummy)
+
+    def test_missing_profile_exits_2_without_value(self):
+        with tempfile.TemporaryDirectory() as td:
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    mod.extract_user_token_from_firefox(td)
+            self.assertEqual(ctx.exception.code, 2)
+            self.assertIn("DEEPSEEK_WEB_TOKEN", stderr.getvalue())
 
 
 if __name__ == "__main__":
