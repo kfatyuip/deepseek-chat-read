@@ -33,14 +33,14 @@ Backed by `scripts/deepseek_read.py` (stdlib only — no third-party packages).
      ```
    Requires Firefox to have visited/logged in to chat.deepseek.com.
    `--firefox-profile <dir>` overrides profile auto-detection.
-2. List sessions:
+2. List sessions (add `--from-firefox` if you chose that token source):
    ```bash
-   python scripts/deepseek_read.py list --count 20
+   python scripts/deepseek_read.py list --count 20 --from-firefox
    # or: python scripts/deepseek_read.py list --count 20 --format md -o sessions.md
    ```
 3. Read one session by id:
    ```bash
-   python scripts/deepseek_read.py read --chat-session-id <id>
+   python scripts/deepseek_read.py read --chat-session-id <id> --from-firefox
    # formats: --format json (default) | messages | md
    # or:      python scripts/deepseek_read.py read --chat-session-id <id> --format md -o chat.md
    ```

@@ -21,23 +21,22 @@ The API may change or break without notice. Use at your own risk; respect DeepSe
 ## Token handling — never committed
 
 - Authentication token / session cookie is a secret. It must **never be committed**.
-- Supply it ONLY via environment variable `DEEPSEEK_WEB_TOKEN` (for example `export DEEPSEEK_WEB_TOKEN='...'` in your shell). There is no `--token` flag or token-file option — the script reads the env var and nothing else.
+- Supply it via `--from-firefox` (extracted in memory from your own Firefox localStorage, never copied/printed/written) or ONLY via environment variable `DEEPSEEK_WEB_TOKEN` (for example `export DEEPSEEK_WEB_TOKEN='...'` in your shell). There is no `--token` flag or token-file option.
 - `.gitignore` excludes `.env`, `*.token`, `token.txt`, `cookies*.json`, and similar.
 - Before every commit, verify with `git status` / `git diff --cached` that no token is staged.
 
 ## Usage
 
-See `SKILL.md` for the skill contract. Scripts live under `scripts/`.
+See `skills/deepseek-chat-read/SKILL.md` for the skill contract. Scripts live under `skills/deepseek-chat-read/scripts/`.
 
 ```bash
-export DEEPSEEK_WEB_TOKEN='...'   # never commit this
-python skills/deepseek-chat-read/scripts/deepseek_read.py list --count 20
-python skills/deepseek-chat-read/scripts/deepseek_read.py read --chat-session-id <id> --format md
+python skills/deepseek-chat-read/scripts/deepseek_read.py list --count 20 --from-firefox
+python skills/deepseek-chat-read/scripts/deepseek_read.py read --chat-session-id <id> --from-firefox --format md
 ```
 
 ## License
 
-Private repo. All rights reserved.
+Public repo. All rights reserved.
 
 ## Layout
 
