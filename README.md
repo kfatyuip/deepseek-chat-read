@@ -21,7 +21,7 @@ The API may change or break without notice. Use at your own risk; respect DeepSe
 ## Token handling — never committed
 
 - Authentication token / session cookie is a secret. It must **never be committed**.
-- Supply it via environment variable `DEEPSEEK_TOKEN` or a local untracked file (e.g. `.env`).
+- Supply it ONLY via environment variable `DEEPSEEK_WEB_TOKEN` (for example `export DEEPSEEK_WEB_TOKEN='...'` in your shell). There is no `--token` flag or token-file option — the script reads the env var and nothing else.
 - `.gitignore` excludes `.env`, `*.token`, `token.txt`, `cookies*.json`, and similar.
 - Before every commit, verify with `git status` / `git diff --cached` that no token is staged.
 
@@ -30,8 +30,9 @@ The API may change or break without notice. Use at your own risk; respect DeepSe
 See `SKILL.md` for the skill contract. Scripts live under `scripts/`.
 
 ```bash
-export DEEPSEEK_TOKEN='...'   # never commit this
-python scripts/reader.py --list-sessions   # placeholder — see scripts/
+export DEEPSEEK_WEB_TOKEN='...'   # never commit this
+python scripts/deepseek_read.py list --count 20
+python scripts/deepseek_read.py read --chat-session-id <id> --format md
 ```
 
 ## License
