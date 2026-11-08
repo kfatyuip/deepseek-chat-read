@@ -290,5 +290,65 @@ class TestFirefoxTokenExtraction(unittest.TestCase):
             self.assertIn("DEEPSEEK_WEB_TOKEN", stderr.getvalue())
 
 
+class TestTokenPrecedence(unittest.TestCase):
+    """DEEPSEEK_WEB_TOKEN always wins; Firefox is explicit opt-in only."""
+
+    def test_env_wins_over_firefox_when_both_present(self):
+        # Fake Firefox DB present + env set + --from-firefox passed:
+        # env must win and Firefox extraction must not even run.
+        import sqlite3
+        with tempfile.TemporaryDirectory() as td:
+            ls_dir = Path(td) / "storage" / "default" / \
+                "https+++chat.deepseek.com" / "ls"
+            ls_dir.mkdir(parents=True)
+            con = sqlite3.connect(ls_dir / "data.sqlite")
+            con.execute("CREATE TABLE data (key TEXT, value BLOB)")
+            con.execute("INSERT INTO data VALUES (?, ?)", (
+                "userToken", json.dumps(
+                    {"value": "firefox-token-for-test", "__version": "0"})))
+            con.commit()
+            con.close()
+            args = mod.build_parser().parse_args(
+                ["list", "--from-firefox", "--firefox-profile", td])
+            with mock.patch.dict(
+                    os.environ, {"DEEPSEEK_WEB_TOKEN": "env-token-for-test"},
+                    clear=False), \
+                 mock.patch.object(
+                    mod, "extract_user_token_from_firefox",
+                    side_effect=AssertionError("firefox must not run")) as ff:
+                self.assertEqual(mod._get_token(args), "env-token-for-test")
+                ff.assert_not_called()
+
+    def test_env_wins_without_flag(self):
+        args = mod.build_parser().parse_args(["list"])
+        with mock.patch.dict(
+                os.environ, {"DEEPSEEK_WEB_TOKEN": "env-token-for-test"},
+                clear=False):
+            self.assertEqual(mod._get_token(args), "env-token-for-test")
+
+    def test_firefox_only_when_no_env_and_flag_passed(self):
+        args = mod.build_parser().parse_args(["list", "--from-firefox"])
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(mod, "extract_user_token_from_firefox",
+                               return_value="firefox-token-for-test") as ff:
+            self.assertEqual(mod._get_token(args), "firefox-token-for-test")
+            ff.assert_called_once()
+
+    def test_no_env_no_flag_exits_2(self):
+        args = mod.build_parser().parse_args(["list"])
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             redirect_stderr(err):
+            with self.assertRaises(SystemExit) as ctx:
+                mod._get_token(args)
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("DEEPSEEK_WEB_TOKEN", err.getvalue())
+
+    def test_help_names_env_first(self):
+        help_text = mod.build_parser().format_help()
+        self.assertLess(help_text.index("DEEPSEEK_WEB_TOKEN always wins"),
+                        help_text.index("opt-in"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,9 +9,11 @@ Endpoints used:
   - GET /api/v0/share/content?share_id=                (public share, no auth)
 
 Auth:
-  The session token comes from DEEPSEEK_WEB_TOKEN, or, with
-  --from-firefox, is extracted in memory from the user's own Firefox
-  localStorage database (never copied, printed, logged, or written).
+  The session token comes from DEEPSEEK_WEB_TOKEN, which always wins
+  when set. Only when it is not set and the user explicitly passes
+  --from-firefox is the token extracted in memory from the user's own
+  Firefox localStorage database (never copied, printed, logged, or
+  written).
   It is sent as `Authorization: Bearer *** on authenticated
   calls. The public-share call sends no Authorization header at all.
 """
@@ -131,19 +133,21 @@ def extract_user_token_from_firefox(profile: str | None = None) -> str:
 
 
 def _get_token(args: argparse.Namespace | None = None) -> str:
+    # DEEPSEEK_WEB_TOKEN always wins when set. Firefox extraction runs
+    # only as an explicit opt-in (--from-firefox) when env is unset.
+    token = os.environ.get(TOKEN_ENV_VAR, "").strip()
+    if token:
+        return token
     if args is not None and getattr(args, "from_firefox", False):
         return extract_user_token_from_firefox(
             getattr(args, "firefox_profile", None)
         )
-    token = os.environ.get(TOKEN_ENV_VAR, "").strip()
-    if not token:
-        print(
-            f"error: {TOKEN_ENV_VAR} environment variable is not set "
-            "(or use --from-firefox)",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    return token
+    print(
+        f"error: {TOKEN_ENV_VAR} environment variable is not set "
+        "(or pass --from-firefox to extract it from Firefox)",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
 
 
 def _get_json(url: str, token: str | None) -> object:
@@ -330,7 +334,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="deepseek_read.py",
         description=(
             "Read-only GET client for DeepSeek chat sessions "
-            "(unofficial API). Never sends or mutates anything."
+            "(unofficial API). Never sends or mutates anything. "
+            "Auth: DEEPSEEK_WEB_TOKEN always wins when set; "
+            "--from-firefox is an explicit opt-in fallback only when "
+            "the env var is unset."
         ),
     )
     parser.add_argument(
@@ -357,13 +364,18 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument(
             "--from-firefox",
             action="store_true",
-            help="extract userToken from your own Firefox localStorage "
-            "(in memory only; no manual DevTools copying)",
+            help="explicit opt-in fallback only when DEEPSEEK_WEB_TOKEN "
+            "is unset: extract userToken from your own Firefox "
+            "localStorage (in memory only; no manual DevTools copying). "
+            "If DEEPSEEK_WEB_TOKEN is set it always wins and this flag "
+            "is ignored.",
         )
         sub.add_argument(
             "--firefox-profile",
             default=None,
-            help="Firefox profile directory (default: auto-detect)",
+            help="Firefox profile directory, used only with "
+            "--from-firefox when DEEPSEEK_WEB_TOKEN is unset "
+            "(default: auto-detect)",
         )
 
     p_list = subparsers.add_parser(
