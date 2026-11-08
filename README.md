@@ -41,4 +41,4 @@ Private repo. All rights reserved.
 
 ## Layout
 
-The skill itself lives at `skills/deepseek-chat-read/` (SKILL.md + `scripts/` + `tests/`) so Hermes hub taps can discover it; this README is repo-level docs.
+The skill itself lives at `skills/deepseek-chat-read/` (SKILL.md + `scripts/`; tests live at repo root `tests/`) so Hermes hub taps can discover it; this README is repo-level docs.
