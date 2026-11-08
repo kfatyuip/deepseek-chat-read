@@ -1,0 +1,15 @@
+{
+  "nested": {
+    "chat_session": {
+      "messages": [
+        {"sender": "user", "content": {"content": "Nested hello"}},
+        {"role": "assistant", "content": 42},
+        "plain string message"
+      ]
+    }
+  },
+  "empty": {"data": {"unexpected": "shape"}},
+  "no_envelope": [
+    {"role": "user", "content": "Bare list"}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "code": 0,
+  "data": {
+    "chat_sessions": [
+      {"id": "sess-1", "title": "Alpha"},
+      {"chat_session_id": "sess-2", "name": "Beta"}
+    ]
+  }
+}

@@ -93,11 +93,14 @@ def _messages(payload: object) -> list:
             value = data.get(key)
             if isinstance(value, list):
                 return value
-        session = data.get("chat_session")
-        if isinstance(session, dict):
-            nested = _messages(session)
-            if nested:
-                return nested
+        # Live share payloads nest under data.biz_data.messages, and
+        # history payloads may nest under data.chat_session; search one
+        # level of dict values before giving up.
+        for value in data.values():
+            if isinstance(value, dict):
+                nested = _messages(value)
+                if nested:
+                    return nested
     return []
 
 
@@ -111,6 +114,19 @@ def _message_role_and_content(message: object) -> tuple[str, str]:
         or "unknown"
     )
     content = message.get("content", message.get("text", ""))
+    if not content:
+        # Live payloads carry text in fragments (REQUEST/RESPONSE/...).
+        # THINK fragments are internal reasoning; skip them in transcripts.
+        fragments = message.get("fragments")
+        if isinstance(fragments, list):
+            parts: list[str] = []
+            for fragment in fragments:
+                if not isinstance(fragment, dict) or fragment.get("type") == "THINK":
+                    continue
+                text = fragment.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+            content = "\n\n".join(parts)
     if isinstance(content, dict):
         content = content.get("content") or content.get("text") or json.dumps(content, ensure_ascii=False)
     if not isinstance(content, str):

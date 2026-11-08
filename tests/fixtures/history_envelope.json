@@ -1,0 +1,7 @@
+{
+  "code": 0,
+  "data": [
+    {"role": "user", "content": "First question"},
+    {"type": "assistant", "text": "First answer"}
+  ]
+}

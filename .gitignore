@@ -10,3 +10,7 @@ credentials*.json
 # Local session data
 sessions/
 *.log
+
+# Python
+__pycache__/
+*.pyc

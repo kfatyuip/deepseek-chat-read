@@ -1,0 +1,33 @@
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "biz_code": 0,
+    "biz_msg": "",
+    "biz_data": {
+      "title": "Shared Conversation",
+      "model_type": "default",
+      "messages": [
+        {
+          "message_id": 1,
+          "role": "USER",
+          "status": "FINISHED",
+          "fragments": [
+            {"id": 1, "type": "FILE", "files": [{"id": "file-x", "file_name": "a.py"}]},
+            {"id": 2, "type": "REQUEST", "content": "Please review this code."}
+          ]
+        },
+        {
+          "message_id": 2,
+          "role": "ASSISTANT",
+          "status": "FINISHED",
+          "fragments": [
+            {"id": 1, "type": "THINK", "content": "internal reasoning, not shown"},
+            {"id": 2, "type": "RESPONSE", "content": "Here is my review."},
+            {"id": 3, "type": "TIP", "content": "This response is AI-generated."}
+          ]
+        }
+      ]
+    }
+  }
+}
