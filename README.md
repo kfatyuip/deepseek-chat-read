@@ -31,10 +31,14 @@ See `SKILL.md` for the skill contract. Scripts live under `scripts/`.
 
 ```bash
 export DEEPSEEK_WEB_TOKEN='...'   # never commit this
-python scripts/deepseek_read.py list --count 20
-python scripts/deepseek_read.py read --chat-session-id <id> --format md
+python skills/deepseek-chat-read/scripts/deepseek_read.py list --count 20
+python skills/deepseek-chat-read/scripts/deepseek_read.py read --chat-session-id <id> --format md
 ```
 
 ## License
 
 Private repo. All rights reserved.
+
+## Layout
+
+The skill itself lives at `skills/deepseek-chat-read/` (SKILL.md + `scripts/` + `tests/`) so Hermes hub taps can discover it; this README is repo-level docs.
