@@ -1,0 +1,12 @@
+# Secrets — never commit tokens / cookies
+.env
+*.token
+token.txt
+cookies*.json
+credentials*.json
+*.pem
+*.key
+
+# Local session data
+sessions/
+*.log
